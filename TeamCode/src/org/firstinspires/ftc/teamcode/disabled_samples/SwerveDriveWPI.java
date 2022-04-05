@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.disabled_samples;
 
-import android.graphics.PointF;
 
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -33,15 +32,8 @@ public class SwerveDriveWPI {
                     m_backLeftLocation, m_backRightLocation
             );
 
-    //Positions of the four drive wheels in robot-coordinate system, in inches
-    public static final PointF[] WHEEL_POS = new PointF[]{
-            new PointF(-8, -7),           //Back Left
-            new PointF(-8, 7),            //Front Left
-            new PointF(8, 7),             //Front Right
-            new PointF(8, -7)             //Back Right
-    };
 public void drive(double vx, double vy, double va, double imu){
-    if(Math.abs(va)>0){ // manual offsett
+    if(Math.abs(va)>0){ // manual offset
         double dx = vx;
         vx = vx * Math.cos(-Math.PI/9) - vy * Math.sin(-Math.PI/9);
         vy = vy * Math.cos(-Math.PI/9) + dx * Math.sin(-Math.PI/9);
@@ -101,31 +93,6 @@ public void drive(double vx, double vy, double va, double imu){
         double offset = normalizeRadians(targetSteer - currentSteer);
         double steerPower = Range.clip(4.0*offset/Math.PI, -1, 1);
         crServos[i].setPower(steerPower);
-    }
-    private void setSteerSimple(int i, double targetSteer){
-        crServos[i].setPower(targetSteer);
-    }
-    private boolean checkReversed(int i, double targetSteer){
-        double currentSteer = getSteerRadians(i);
-        double offset = normalizeRadians(targetSteer - currentSteer);
-        boolean result = false;
-        if (Math.abs(offset) > Math.PI/2){
-            result = true;
-            offset = normalizeRadians(offset + Math.PI);
-        }
-        double steerPower = Range.clip(4.0*offset/Math.PI, -1, 1);
-        return result;
-    }
-    private double returnAngularSpeed(int i, double targetSteer){
-        double currentSteer = getSteerRadians(i);
-        double offset = normalizeRadians(targetSteer - currentSteer);
-        boolean result = false;
-        if (Math.abs(offset) > Math.PI/2){
-            result = true;
-            offset = normalizeRadians(offset + Math.PI);
-        }
-        double steerPower = Range.clip(4.0*offset/Math.PI, -1, 1);
-        return steerPower;
     }
     public static double normalizeRadians(double radians) {
         double temp = (radians + Math.PI) / (2.0 * Math.PI);
