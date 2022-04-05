@@ -12,10 +12,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
-@TeleOp(name = "Test Swerve", group = "Test")
+@TeleOp(name = "Swerve Complete", group = "Test")
 public class TestSwerve extends LinearOpMode {
 
-    SwerveDrive bot = new SwerveDrive();
+    SwerveDriveWPI bot = new SwerveDriveWPI();
     BNO055IMU imu;
     public void runOpMode(){
 
@@ -33,14 +33,14 @@ public class TestSwerve extends LinearOpMode {
         this.imu.initialize(parameters);
         waitForStart();
         while(opModeIsActive()) {
-            float vx = gamepad1.left_stick_x;
-            float vy = -gamepad1.left_stick_y;
-            float va = gamepad1.right_stick_x * (float) SwerveDrive.MAX_ANGULAR_SPEED;
+            double vx = -gamepad1.left_stick_x * SwerveDriveWPI.MAX_DRIVE_SPEED;
+            double vy = -gamepad1.left_stick_y * SwerveDriveWPI.MAX_DRIVE_SPEED;
+            double va = gamepad1.right_stick_x * SwerveDriveWPI.MAX_ANGULAR_SPEED;
             //float va = -gamepad1.right_stick_x;
             Orientation orientation = this.imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZYX, AngleUnit.RADIANS);
             telemetry.addData("Heading", Math.toDegrees(orientation.firstAngle));
             telemetry.update();
-            bot.setDriveSpeed(vx, vy, va,orientation.firstAngle,-gamepad1.right_stick_x);
+            bot.drive(vy, vx, va,orientation.firstAngle);
         }
     }
 

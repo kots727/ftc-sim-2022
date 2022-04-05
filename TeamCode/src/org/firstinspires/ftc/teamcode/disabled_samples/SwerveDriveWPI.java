@@ -8,19 +8,30 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.Range;
 
-public class SwerveDrive {
-
-    public static final double WHEEL_CIRCUMFERENCE = 4 * Math.PI;
+public class SwerveDriveWPI {
+    double width = 16*0.0254;//in meters
+    double length = 14*0.0254;//in meters
+    public static final double WHEEL_CIRCUMFERENCE = (4*0.0254) * Math.PI;
     public static final double TICKS_PER_ROTATION = 1120;
     public static final double MAX_TICKS_PER_SECOND = 2500;
 
-    public static final double CHASSIS_RAD_SQUARED = 7*7 + 8*8;
+    public static final double CHASSIS_RAD_SQUARED = (7*.0254)*(7*.0254) + (8*.0254)*(8*.0254);
     public static final double MAX_DRIVE_SPEED = MAX_TICKS_PER_SECOND * WHEEL_CIRCUMFERENCE / TICKS_PER_ROTATION;
     public static final double MAX_ANGULAR_SPEED = MAX_DRIVE_SPEED / Math.sqrt(CHASSIS_RAD_SQUARED);
+
 
     CRServo[] crServos = new CRServo[4];    //Steering
     DcMotor[] encoders = new DcMotor[4];    //Encoders to monitor steering
     DcMotor[] motors = new DcMotor[4];
+    Translation2d m_frontLeftLocation =new Translation2d(width/2, length/2);
+    Translation2d m_frontRightLocation =new Translation2d(width/2, -length/2);
+    Translation2d m_backLeftLocation =new Translation2d(-width/2, length/2);
+    Translation2d m_backRightLocation =new Translation2d(-width/2, -length/2);
+    SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics
+            (
+                    m_frontLeftLocation, m_frontRightLocation,
+                    m_backLeftLocation, m_backRightLocation
+            );
 
     //Positions of the four drive wheels in robot-coordinate system, in inches
     public static final PointF[] WHEEL_POS = new PointF[]{
@@ -29,7 +40,44 @@ public class SwerveDrive {
             new PointF(8, 7),             //Front Right
             new PointF(8, -7)             //Back Right
     };
+public void drive(double vx, double vy, double va, double imu){
+    if(Math.abs(va)>0){ // manual offsett
+        double dx = vx;
+        vx = vx * Math.cos(-Math.PI/9) - vy * Math.sin(-Math.PI/9);
+        vy = vy * Math.cos(-Math.PI/9) + dx * Math.sin(-Math.PI/9);
+    }
+    ChassisSpeeds speeds = ChassisSpeeds.fromFieldRelativeSpeeds(
+            vx, vy, va, Rotation2d.fromRadians(imu)
+    );
 
+// Convert to module states
+    SwerveModuleState[] moduleStates =
+            m_kinematics.toSwerveModuleStates(speeds);
+
+// Front left module state
+    SwerveModuleState frontLeft = moduleStates[0];
+
+// Front right module state
+    SwerveModuleState frontRight = moduleStates[1];
+
+// Back left module state
+    SwerveModuleState backLeft = moduleStates[2];
+
+// Back right module state
+    SwerveModuleState backRight = moduleStates[3];
+    backLeft = backLeft.optimize(backLeft,Rotation2d.fromRadians(getSteerRadians(0)));
+    frontLeft = frontLeft.optimize(frontLeft,Rotation2d.fromRadians(getSteerRadians(1)));
+    frontRight = frontRight.optimize(frontRight,Rotation2d.fromRadians(getSteerRadians(2)));
+    backRight = backRight.optimize(backRight,Rotation2d.fromRadians(getSteerRadians(3)));
+    motors[0].setPower(backLeft.speedMetersPerSecond/MAX_DRIVE_SPEED);
+    motors[1].setPower(frontLeft.speedMetersPerSecond/MAX_DRIVE_SPEED);
+    motors[2].setPower(frontRight.speedMetersPerSecond/MAX_DRIVE_SPEED);
+    motors[3].setPower(backRight.speedMetersPerSecond/MAX_DRIVE_SPEED);
+    setSteer(0,backLeft.angle.getRadians());
+    setSteer(1,frontLeft.angle.getRadians());
+    setSteer(2,frontRight.angle.getRadians());
+    setSteer(3,backRight.angle.getRadians());
+}
 
     public void init(HardwareMap hardwareMap) {
         String[] crServoNames = new String[]{"back_left_crservo", "front_left_crservo", "front_right_crservo", "back_right_crservo"};
@@ -44,91 +92,15 @@ public class SwerveDrive {
         motors[0].setDirection(DcMotorSimple.Direction.REVERSE);
         motors[1].setDirection(DcMotorSimple.Direction.REVERSE);
     }
-    public void setDriveSpeed(float vx, float vy, float va, double xz,double z) {
-        boolean xd = vx==0&&vy==0&&va==0;
-        double[] wheelPowers = new double[4];
-        if(xd){
-            for (int i = 0; i < 4; i++) {
-                crServos[i].setPower(0);
-                motors[i].setPower(wheelPowers[i]);
-            }
-        }
-        else if(va==0) {
-            for (int i = 0; i < 4; i++) {
-                double targetSteer = (normalizeRadians(Math.atan2(vy, vx) - Math.PI / 2))-xz;
-                boolean reversed = setSteer(i, targetSteer);
-                wheelPowers[i] = Math.sqrt(vx * vx + vy * vy);
-                if (reversed) {
-
-                    wheelPowers[i] *= -1;
-                }
-                motors[i].setPower(wheelPowers[i]);
-            }
-        }
-        else if((vx!=0||vy!=0)&&va!=0){
-            for (int i = 0; i < 4; i++) {
-                double[] wheelPowersM = new double[4];
-                double[] wheelPowersR = new double[4];
-                double targetSteerx = (normalizeRadians(Math.atan2(vy, vx) - Math.PI / 2)-xz)+Math.toRadians(20);
-
-                boolean reversedx = checkReversed(i, targetSteerx);
-                targetSteerx = returnAngularSpeed(i,targetSteerx);
-                wheelPowersM[i] = Math.sqrt(vx * vx + vy * vy);
-                if (reversedx) {
-                    wheelPowersM[i] *= -1;
-                }
-
-                double targetSteerR = normalizeRadians(Math.atan2(va * WHEEL_POS[i].x, -(va * WHEEL_POS[i].y)) - Math.PI/2);
-                boolean reversedR = checkReversed(i, targetSteerR);
-                targetSteerR = returnAngularSpeed(i,targetSteerR);
-                wheelPowersR[0] =z;
-                wheelPowersR[1] =z;
-                wheelPowersR[2] =z;
-                wheelPowersR[3] =z;
-
-                if (reversedR)
-                    wheelPowersR[i] *= -1;
-                if (z>0){
-                    wheelPowersR[i] *= -1;
-                }
-                double targetSteer = (targetSteerR*(.6)) +(targetSteerx*(.4));
-                wheelPowers[i] = (wheelPowersM[i]*(.4)) + (wheelPowersR[i]*(.6));
-                motors[i].setPower(wheelPowers[i]);
-                setSteerSimple(i,targetSteer);
-            }
-            }
-            else{
-            for (int i = 0; i < 4; i++) {
-                double targetSteer = normalizeRadians(Math.atan2(va * WHEEL_POS[i].x, -(va * WHEEL_POS[i].y)) - Math.PI/2);
-                boolean reversed = setSteer(i, targetSteer);
-                wheelPowers[0] =z;
-                wheelPowers[1] =z;
-                wheelPowers[2] =z;
-                wheelPowers[3] =z;
-                if (reversed)
-                    wheelPowers[i] *= -1;
-                if (z>0){
-                    wheelPowers[i] *= -1;
-                }
-                motors[i].setPower(wheelPowers[i]);
-            }
-            }
-    }
 
     private double getSteerRadians(int i){
         return normalizeRadians(2.0 * Math.PI * encoders[i].getCurrentPosition()/TICKS_PER_ROTATION);
     }
-    private boolean setSteer(int i, double targetSteer){
+    private void setSteer(int i, double targetSteer){
         double currentSteer = getSteerRadians(i);
         double offset = normalizeRadians(targetSteer - currentSteer);
-        boolean result = false;
-        if (Math.abs(offset) > Math.PI/2){
-            result = true;
-            offset = normalizeRadians(offset + Math.PI);
-        }
         double steerPower = Range.clip(4.0*offset/Math.PI, -1, 1);
         crServos[i].setPower(steerPower);
-        return result;
     }
     private void setSteerSimple(int i, double targetSteer){
         crServos[i].setPower(targetSteer);

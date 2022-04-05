@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="ejml-simple-0.41">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/TeamCode/src/libs/ejml-simple-0.41.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
